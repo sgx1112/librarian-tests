@@ -109,19 +109,6 @@ var results_notifier = {
         //results_notifier.addFinishedElement();
     },
     reportToSuiteTracker: function (tests, suiteTrackerUrl) {
-        var regex = new RegExp("[\\?&]runid=([^&#]*)");
-        var finds = regex.exec(window.location.search.toLowerCase());
-        if (finds != null) {
-            var runId = parseInt(decodeURIComponent(finds[1].replace(/\+/g, " ")));
-            if (!isNaN(runId) && runId > 0)
-                suiteTrackerUrl += runId.toString();
-            else
-                return;
-        }
-        else {
-            return;
-        }
-
         var url = window.location.href.toLowerCase().split('?')[0];
         var testGroup = {};
         testGroup.type = "group";
@@ -152,12 +139,14 @@ var results_notifier = {
             function (tests, harness_status) {
                 var sessionId = results_notifier.getParamValue("sessionId");
                 if (sessionId != null && sessionId != "") {
-                    var apiUrl = '{ApiBaseUrl}/api/results'; //Copy the value of "AppBaseUrl" from App.config of Protractor.Automation.Console.
+                    //Copy the value of "AppBaseUrl" from config file of Protractor.
+                    var apiUrl = 'http://seanguo2:8080/api/results';
                     results_notifier.sendTestResults(tests, apiUrl);
                 }
                 var runId = results_notifier.getParamValue("runId");
                 if (runId != null && !isNaN(parseInt(runId)) && parseInt(runId) > 0) {
-                    var suiteTrackerUrl = '{SuiteTrackerUrl}/ConformanceRuns/UploadPartial/'; //Copy the value of "SuiteTrackerUrl" from App.config of Protractor.Automation.Console.
+                    //Copy the value of "SuiteTrackerUrl" from config file of Protractor.
+                    var suiteTrackerUrl = 'http://seanguo2:8081/SuiteTracker/ConformanceRuns/UploadPartial/' + runId;
                     results_notifier.reportToSuiteTracker(tests, suiteTrackerUrl);
                 }
                 results_notifier.addFinishedElement();
