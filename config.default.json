@@ -1,0 +1,8 @@
+{"host": "0.0.0.0",
+ "ports":{"http":[8000, 49800],
+          "https":[8000],
+          "ws":[8888]},
+ "external_domain":"w3c-test.org",
+ "check_subdomains": true,
+ "log_level":"debug",
+ "bind_hostname": true}

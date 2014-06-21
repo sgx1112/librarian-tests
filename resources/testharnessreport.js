@@ -4,28 +4,50 @@ var results_notifier = {
         finishedElement.setAttribute("id", "protractor-test-finished");
         document.body.appendChild(finishedElement);
     },
+    getParamValue: function (name) {
+        var val = null;
+        var regex = new RegExp("[\\?&]" + name.toLowerCase() + "=([^&#]*)");
+        var finds = regex.exec(window.location.search.toLowerCase());
+        if (finds != null) {
+            val = decodeURIComponent(finds[1].replace(/\+/g, " "));
+        }
+        return val;
+    },
+    corsRequest: function (method, url) {
+        var xhr = null;
+        if (window.XMLHttpRequest) {
+            // XHR for IE7+, Firefox, Chrome, Opera, Safari
+            xhr = new XMLHttpRequest();
+            if ("withCredentials" in xhr) {
+                // XHR for Chrome/Firefox/Opera/Safari.
+                xhr.open(method, url, false);
+                xhr.withCredentials = true;
+            } else if (typeof XDomainRequest != "undefined") {
+                // XDomainRequest for IE.
+                xhr = new XDomainRequest();
+                xhr.open(method, url);
+            }
+        } else {
+            // XHR for IE6, IE5
+            xhr = new ActiveXObject("Microsoft.XMLHTTP");
+            xmlhttp.open(method, url, false);
+        }
+        return xhr;
+    },
     ajaxPost: function (url, data) {
         var params = "";
         var keyCount = 0;
-        var response = "";
-
+        var response = null;
         try {
-            if (window.XMLHttpRequest) {// code for IE7+, Firefox, Chrome, Opera, Safari
-                xmlhttp = new XMLHttpRequest();
-            } else {// code for IE6, IE5
-                xmlhttp = new ActiveXObject("Microsoft.XMLHTTP");
-            }
-
-            xmlhttp.open("POST", url, false);
-            xmlhttp.setRequestHeader("Content-type", "application/json");
-            xmlhttp.send(data);
-
-            response = xmlhttp.responseText;
+            var xhr = results_notifier.corsRequest("POST", url);
+            if (!xhr) throw new Error('CORS not supported');
+            xhr.setRequestHeader("Content-Type", "application/json");
+            xhr.send(data);
+            response = xhr.responseText;
         }
         catch (e) {
             response = e.message;
         }
-
         return response;
     },
     sendTestResults: function (tests, apiUrl) {
@@ -84,9 +106,9 @@ var results_notifier = {
         }
 
         results_notifier.ajaxPost(apiUrl, JSON.stringify(testFileResults));
-        results_notifier.addFinishedElement();
+        //results_notifier.addFinishedElement();
     },
-    sendTestResultsToSuiteTracker: function (tests, suiteTrackerUrl) {
+    reportToSuiteTracker: function (tests, suiteTrackerUrl) {
         var regex = new RegExp("[\\?&]runid=([^&#]*)");
         var finds = regex.exec(window.location.search.toLowerCase());
         if (finds != null) {
@@ -109,10 +131,10 @@ var results_notifier = {
         for (var i = 0; i < tests.length; i++) {
             var test = {};
             test.type = "test";
-            test.name = tests[i].name;
+            test.name = tests[i].name.replace(/\"/g, "'");
             test.url = url;
             test.result = tests[i].status == 0 ? "pass" : "fail"; //TODO
-            test.message = tests[i].message == null ? "" : tests[i].message;
+            test.message = tests[i].message == null ? "" : tests[i].message.replace(/\"/g, "'");
             testGroup.tests.push(test);
         }
 
@@ -123,15 +145,22 @@ var results_notifier = {
         var postData = { results: jsonResult };
 
         results_notifier.ajaxPost(suiteTrackerUrl, JSON.stringify(postData));
-        results_notifier.addFinishedElement();
+        //results_notifier.addFinishedElement();
     },
     setup: function () {
         add_completion_callback(
             function (tests, harness_status) {
-                var apiUrl = '#REPORT API URL HERE';
-                results_notifier.sendTestResults(tests, apiUrl);
-                var suiteTrackerUrl = 'http://IEPortal/SuiteTracker/ConformanceRuns/UploadPartial/';
-                results_notifier.sendTestResultsToSuiteTracker(tests, suiteTrackerUrl);
+                var sessionId = results_notifier.getParamValue("sessionId");
+                if (sessionId != null && sessionId != "") {
+                    var apiUrl = '{ApiBaseUrl}/api/results'; //Copy the value of "AppBaseUrl" from App.config of Protractor.Automation.Console.
+                    results_notifier.sendTestResults(tests, apiUrl);
+                }
+                var runId = results_notifier.getParamValue("runId");
+                if (runId != null && !isNaN(parseInt(runId)) && parseInt(runId) > 0) {
+                    var suiteTrackerUrl = '{SuiteTrackerUrl}/ConformanceRuns/UploadPartial/'; //Copy the value of "SuiteTrackerUrl" from App.config of Protractor.Automation.Console.
+                    results_notifier.reportToSuiteTracker(tests, suiteTrackerUrl);
+                }
+                results_notifier.addFinishedElement();
             });
     }
 };
