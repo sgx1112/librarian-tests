@@ -21,7 +21,9 @@ var results_notifier = {
             if ("withCredentials" in xhr) {
                 // XHR for Chrome/Firefox/Opera/Safari.
                 xhr.open(method, url, false);
-                xhr.withCredentials = true;
+                var isLocalHost = url.toLowerCase().indexOf("http://localhost:2913/") == 0;
+                if (!isLocalHost) // Do not inlcude credentials, when use request default localhost.
+                    xhr.withCredentials = true;
             } else if (typeof XDomainRequest != "undefined") {
                 // XDomainRequest for IE.
                 xhr = new XDomainRequest();
@@ -50,16 +52,7 @@ var results_notifier = {
         }
         return response;
     },
-    sendTestResults: function (tests, apiUrl) {
-        var apiTestStatuses = {
-            Unknown: 0,
-            Failed: 1,
-            Passed: 2,
-            ManualCheckNeeded: 3,
-            Timeout: 4,
-            NotRun: 5
-        };
-
+    translateStatus: function (testStatus, reportToSuiteTracker) {
         var Test = {
             statuses: {
                 PASS: 0,
@@ -69,12 +62,24 @@ var results_notifier = {
             }
         };
 
+        var apiTestStatuses = {
+            Unknown: reportToSuiteTracker ? "unknwn" : 0,
+            Failed: reportToSuiteTracker ? "fail" : 1,
+            Passed: reportToSuiteTracker ? "pass" : 2,
+            ManualCheckNeeded: reportToSuiteTracker ? "check" : 3,
+            Timeout: reportToSuiteTracker ? "timeout" : 4,
+            NotRun: reportToSuiteTracker ? "notrun" : 5
+        };
+
         var statusTranslation = {};
         statusTranslation[Test.statuses.PASS] = apiTestStatuses.Passed;
         statusTranslation[Test.statuses.FAIL] = apiTestStatuses.Failed;
         statusTranslation[Test.statuses.TIMEOUT] = apiTestStatuses.Timeout;
         statusTranslation[Test.statuses.NOTRUN] = apiTestStatuses.NotRun;
 
+        return statusTranslation[testStatus];
+    },
+    sendTestResults: function (tests, apiUrl) {
         var requests = 0;
         var testResult;
         var test;
@@ -90,7 +95,7 @@ var results_notifier = {
             test = tests[testIndex];
 
             testResult.Name = test.name;
-            testResult.Status = statusTranslation[test.status];
+            testResult.Status = results_notifier.translateStatus(test.status, false);
             testResult.Comments = test.message;
 
             testFileResults.Results.push(testResult);
@@ -106,7 +111,6 @@ var results_notifier = {
         }
 
         results_notifier.ajaxPost(apiUrl, JSON.stringify(testFileResults));
-        //results_notifier.addFinishedElement();
     },
     reportToSuiteTracker: function (tests, suiteTrackerUrl) {
         var url = window.location.href.toLowerCase().split('?')[0];
@@ -120,7 +124,7 @@ var results_notifier = {
             test.type = "test";
             test.name = tests[i].name.replace(/\"/g, "'");
             test.url = url;
-            test.result = tests[i].status == 0 ? "pass" : "fail"; //TODO
+            test.result = results_notifier.translateStatus(tests[i].status, true);
             test.message = tests[i].message == null ? "" : tests[i].message.replace(/\"/g, "'");
             testGroup.tests.push(test);
         }
@@ -132,21 +136,20 @@ var results_notifier = {
         var postData = { results: jsonResult };
 
         results_notifier.ajaxPost(suiteTrackerUrl, JSON.stringify(postData));
-        //results_notifier.addFinishedElement();
     },
     setup: function () {
         add_completion_callback(
             function (tests, harness_status) {
                 var sessionId = results_notifier.getParamValue("sessionId");
                 if (sessionId != null && sessionId != "") {
-                    //Copy the value of "AppBaseUrl" from config file of Protractor.
-                    var apiUrl = 'http://seanguo2:8080/api/results';
+                    //Keep the value of "AppBaseUrl" from config file of Protractor same with the host here.
+                    var apiUrl = 'http://seanguo1:8080/api/results';
                     results_notifier.sendTestResults(tests, apiUrl);
                 }
                 var runId = results_notifier.getParamValue("runId");
                 if (runId != null && !isNaN(parseInt(runId)) && parseInt(runId) > 0) {
                     //Copy the value of "SuiteTrackerUrl" from config file of Protractor.
-                    var suiteTrackerUrl = 'http://seanguo2:8081/SuiteTracker/ConformanceRuns/UploadPartial/' + runId;
+                    var suiteTrackerUrl = 'http://seanguo1:8081/SuiteTracker/ConformanceRuns/UploadPartial/' + runId;
                     results_notifier.reportToSuiteTracker(tests, suiteTrackerUrl);
                 }
                 results_notifier.addFinishedElement();
